@@ -21,6 +21,21 @@ const initialManageForm = {
   newPassword: "",
 };
 
+const ACTION_BUTTON_STYLE = {
+  minWidth: 190,
+};
+
+function isNotFoundError(error) {
+  const message = String(error?.message || "").toLowerCase();
+
+  return (
+    message.includes("not found") ||
+    message.includes("404") ||
+    message.includes("user not found") ||
+    message.includes("пользователь не найден")
+  );
+}
+
 export default function UsersPage() {
   const [createForm, setCreateForm] = useState(initialCreateForm);
   const [manageForm, setManageForm] = useState(initialManageForm);
@@ -28,8 +43,7 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [managing, setManaging] = useState(false);
 
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [notice, setNotice] = useState(null);
   const [foundUser, setFoundUser] = useState(null);
 
   function updateCreate(field, value) {
@@ -40,14 +54,25 @@ export default function UsersPage() {
     setManageForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  function clearMessages() {
-    setError("");
-    setSuccess("");
+  function clearNotice() {
+    setNotice(null);
+  }
+
+  function setSuccess(text) {
+    setNotice({ type: "success", text });
+  }
+
+  function setError(text) {
+    setNotice({ type: "error", text });
+  }
+
+  function beginAction() {
+    clearNotice();
   }
 
   async function handleCreate(e) {
     e.preventDefault();
-    clearMessages();
+    beginAction();
     setFoundUser(null);
     setSaving(true);
 
@@ -73,16 +98,22 @@ export default function UsersPage() {
 
   async function handleFindByLogin(e) {
     e.preventDefault();
-    clearMessages();
+    beginAction();
     setFoundUser(null);
     setManaging(true);
 
+    const login = manageForm.login.trim();
+
     try {
-      const user = await getUserByLoginApi(manageForm.login.trim());
+      const user = await getUserByLoginApi(login);
       setFoundUser(user);
       setSuccess(`Пользователь найден: ${user.login}`);
     } catch (e) {
-      setError(e?.message || "Пользователь не найден");
+      if (isNotFoundError(e)) {
+        setError(`Пользователь с логином ${login} не найден`);
+      } else {
+        setError(e?.message || "Ошибка поиска пользователя");
+      }
     } finally {
       setManaging(false);
     }
@@ -90,6 +121,7 @@ export default function UsersPage() {
 
   async function handleDeleteByLogin() {
     const login = manageForm.login.trim();
+
     if (!login) {
       setError("Введите логин пользователя");
       return;
@@ -98,7 +130,7 @@ export default function UsersPage() {
     const confirmed = window.confirm(`Удалить пользователя ${login}?`);
     if (!confirmed) return;
 
-    clearMessages();
+    beginAction();
     setManaging(true);
 
     try {
@@ -107,7 +139,11 @@ export default function UsersPage() {
       setFoundUser(null);
       setManageForm(initialManageForm);
     } catch (e) {
-      setError(e?.message || "Ошибка удаления пользователя");
+      if (isNotFoundError(e)) {
+        setError(`Пользователь с логином ${login} не найден`);
+      } else {
+        setError(e?.message || "Ошибка удаления пользователя");
+      }
     } finally {
       setManaging(false);
     }
@@ -127,7 +163,7 @@ export default function UsersPage() {
       return;
     }
 
-    clearMessages();
+    beginAction();
     setManaging(true);
 
     try {
@@ -135,11 +171,17 @@ export default function UsersPage() {
       setSuccess(`Пароль пользователя ${login} успешно сброшен`);
       setManageForm((prev) => ({ ...prev, newPassword: "" }));
     } catch (e) {
-      setError(e?.message || "Ошибка сброса пароля");
+      if (isNotFoundError(e)) {
+        setError(`Пользователь с логином ${login} не найден`);
+      } else {
+        setError(e?.message || "Ошибка сброса пароля");
+      }
     } finally {
       setManaging(false);
     }
   }
+
+  const isBusy = saving || managing;
 
   return (
     <div className="page-grid">
@@ -154,8 +196,13 @@ export default function UsersPage() {
         </div>
       </section>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
+      <div className="alert-slot" aria-live="polite">
+        {notice ? (
+          <div className={notice.type === "error" ? "alert alert-error" : "alert alert-success"}>
+            {notice.text}
+          </div>
+        ) : null}
+      </div>
 
       <div className="two-col-grid">
         <section className="card">
@@ -244,7 +291,13 @@ export default function UsersPage() {
             </label>
 
             <div className="form-actions">
-              <button className="btn btn-primary" type="submit" disabled={saving}>
+              <button
+                className="btn btn-primary stable-btn"
+                style={ACTION_BUTTON_STYLE}
+                type="submit"
+                disabled={isBusy}
+                aria-busy={saving}
+              >
                 {saving ? "Создание..." : "Создать пользователя"}
               </button>
             </div>
@@ -262,7 +315,11 @@ export default function UsersPage() {
               <input
                 className="input"
                 value={manageForm.login}
-                onChange={(e) => updateManage("login", e.target.value)}
+                onChange={(e) => {
+                  updateManage("login", e.target.value);
+                  setFoundUser(null);
+                  clearNotice();
+                }}
                 minLength={8}
                 maxLength={8}
                 placeholder="Введите логин"
@@ -271,13 +328,19 @@ export default function UsersPage() {
             </label>
 
             <div className="form-actions">
-              <button className="btn btn-primary" type="submit" disabled={managing}>
+              <button
+                className="btn btn-primary stable-btn"
+                style={ACTION_BUTTON_STYLE}
+                type="submit"
+                disabled={isBusy}
+                aria-busy={managing}
+              >
                 {managing ? "Поиск..." : "Найти пользователя"}
               </button>
             </div>
           </form>
 
-          {foundUser && (
+          {foundUser ? (
             <div className="sub-card" style={{ marginTop: 16 }}>
               <div className="result-title">{foundUser.login}</div>
               <div className="result-meta">
@@ -292,7 +355,7 @@ export default function UsersPage() {
                 </span>
               </div>
             </div>
-          )}
+          ) : null}
 
           <div className="form-grid" style={{ marginTop: 16 }}>
             <label className="form-label">
@@ -310,19 +373,21 @@ export default function UsersPage() {
 
           <div className="users-actions-row" style={{ marginTop: 16 }}>
             <button
-              className="btn btn-secondary"
+              className="btn btn-secondary stable-btn"
+              style={ACTION_BUTTON_STYLE}
               type="button"
               onClick={handleResetPasswordByLogin}
-              disabled={managing}
+              disabled={isBusy}
             >
               Сбросить пароль
             </button>
 
             <button
-              className="btn btn-danger"
+              className="btn btn-danger stable-btn"
+              style={ACTION_BUTTON_STYLE}
               type="button"
               onClick={handleDeleteByLogin}
-              disabled={managing}
+              disabled={isBusy}
             >
               Удалить пользователя
             </button>

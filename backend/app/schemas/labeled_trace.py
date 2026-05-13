@@ -2,29 +2,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
-class LabelRunIn(BaseModel):
-    raw_trace_id: int
-    kind: str = Field(pattern="^(qos|mac_intensity)$")
-    t_from: datetime | None = None
-    t_to: datetime | None = None
-
-
-class JobOut(BaseModel):
-    id: int
-    status: str
-    kind: str
-    raw_trace_id: int
-    group_id: int
-    requested_by: int
-    t_from: datetime | None = None
-    t_to: datetime | None = None
-    tool_info: str | None = None
-    error_text: str | None = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class LabeledTraceOut(BaseModel):
     id: int
     kind: str

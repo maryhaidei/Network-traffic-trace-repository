@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { createGroup } from "../api/client";
 
 const initialForm = {
   name: "",
@@ -14,7 +14,6 @@ const initialForm = {
 };
 
 export default function CreateGroupForm({ onCreated }) {
-  const { token } = useAuth();
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -43,21 +42,8 @@ export default function CreateGroupForm({ onCreated }) {
           : null,
       };
 
-      const resp = await fetch("/raw-groups", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+      const group = await createGroup(payload);
 
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(text || "Не удалось создать группу");
-      }
-
-      const group = await resp.json();
       setSuccess(`Группа создана: ${group.name} (ID ${group.id})`);
       setForm(initialForm);
       onCreated?.(group);
@@ -106,7 +92,7 @@ export default function CreateGroupForm({ onCreated }) {
           />
         </label>
 
-        <label className="form-field form-field-full">
+        <label className="form-field">
           <span className="form-label">Характер данных</span>
           <input
             className="input"
@@ -117,7 +103,7 @@ export default function CreateGroupForm({ onCreated }) {
           />
         </label>
 
-        <label className="form-field form-field-full">
+        <label className="form-field">
           <span className="form-label">Описание аппаратуры</span>
           <textarea
             className="input textarea"
@@ -128,7 +114,7 @@ export default function CreateGroupForm({ onCreated }) {
           />
         </label>
 
-        <label className="form-field form-field-full">
+        <label className="form-field">
           <span className="form-label">Описание ПО сбора</span>
           <textarea
             className="input textarea"
@@ -139,7 +125,7 @@ export default function CreateGroupForm({ onCreated }) {
           />
         </label>
 
-        <label className="form-field form-field-full">
+        <label className="form-field">
           <span className="form-label">Степень обработки данных</span>
           <textarea
             className="input textarea"
@@ -148,18 +134,6 @@ export default function CreateGroupForm({ onCreated }) {
             onChange={(e) => change("processing_degree", e.target.value)}
             required
           />
-        </label>
-
-        <label className="form-field">
-          <span className="form-label">Число точек сбора</span>
-          <select
-            className="input"
-            value={form.capture_points}
-            onChange={(e) => change("capture_points", e.target.value)}
-          >
-            <option value={1}>1</option>
-            <option value={2}>2</option>
-          </select>
         </label>
 
         <label className="form-field">
@@ -182,6 +156,18 @@ export default function CreateGroupForm({ onCreated }) {
             onChange={(e) => change("capture_end", e.target.value)}
             required
           />
+        </label>
+
+        <label className="form-field">
+          <span className="form-label">Число точек сбора</span>
+          <select
+            className="input"
+            value={form.capture_points}
+            onChange={(e) => change("capture_points", e.target.value)}
+          >
+            <option value={1}>1</option>
+            <option value={2}>2</option>
+          </select>
         </label>
 
         <div className="form-actions form-field-full">

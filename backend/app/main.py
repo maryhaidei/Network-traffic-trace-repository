@@ -16,11 +16,12 @@ from app.routers.raw_traces import router as raw_traces_router
 from app.routers.labeled_traces import router as labeled_traces_router
 
 
+
 app = FastAPI(title="Traffic Trace Repository (V1)")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

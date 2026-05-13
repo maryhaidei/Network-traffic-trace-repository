@@ -1,35 +1,17 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import CreateGroupForm from "../components/CreateGroupForm";
-import { useAuth } from "../auth/AuthContext";
-
-async function fetchJson(url, options = {}) {
-  const resp = await fetch(url, options);
-
-  if (!resp.ok) {
-    let message = "Ошибка запроса";
-    try {
-      const data = await resp.json();
-      message = data?.detail || JSON.stringify(data);
-    } catch {
-      message = await resp.text();
-    }
-    throw new Error(message || "Ошибка запроса");
-  }
-
-  const contentType = resp.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    return await resp.json();
-  }
-
-  return null;
-}
+import {
+  getRawTracesByGroup,
+  searchGroups,
+  uploadGroupDescription,
+  uploadGroupSchema,
+  uploadLabeledTrace,
+  uploadPcapBatchToGroup,
+} from "../api/client";
 
 export default function UploadPage() {
-  const { token } = useAuth();
-
   const [activeTab, setActiveTab] = useState("raw");
 
-  const [createdGroup, setCreatedGroup] = useState(null);
   const [currentGroup, setCurrentGroup] = useState(null);
   const [groupNameInput, setGroupNameInput] = useState("");
 
@@ -52,25 +34,55 @@ export default function UploadPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const effectiveGroupName = useMemo(() => {
-    if (groupNameInput.trim()) return groupNameInput.trim();
-    if (createdGroup?.name) return createdGroup.name;
-    return "";
-  }, [groupNameInput, createdGroup]);
+  const effectiveGroupName = groupNameInput.trim();
 
-  function buildHeaders(extra = {}) {
-    return {
-      Authorization: `Bearer ${token}`,
-      ...extra,
-    };
+  const groupPickerStyle = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 16,
+    alignItems: "end",
+    marginTop: 16,
+  };
+
+  const groupPickerButtonStyle = {
+    minHeight: 52,
+    whiteSpace: "nowrap",
+    alignSelf: "end",
+  };
+
+  const statusAreaStyle = {
+    display: "grid",
+    gap: 10,
+    marginTop: 16,
+  };
+
+  function selectGroup(group) {
+    if (!group) return;
+
+    setCurrentGroup(group);
+    setGroupNameInput(group.name || "");
+    setRawTraces([]);
+    setSelectedDonors([]);
+    setMessage("");
+    setError("");
   }
 
-  useEffect(() => {
-    if (createdGroup?.name) {
-      setGroupNameInput(createdGroup.name);
-      setCurrentGroup(createdGroup);
+  async function handleGroupCreated(group) {
+    selectGroup(group);
+
+    try {
+      await loadRawTracesByGroup(group);
+    } catch {
+      // Ошибка уже будет записана внутри loadRawTracesByGroup.
     }
-  }, [createdGroup]);
+  }
+
+  function isCurrentGroupMatchedToInput() {
+    const inputName = groupNameInput.trim().toLowerCase();
+    const selectedName = (currentGroup?.name || "").trim().toLowerCase();
+
+    return Boolean(currentGroup?.id && inputName && inputName === selectedName);
+  }
 
   async function resolveGroupByName(groupName, options = {}) {
     const { silent = false } = options;
@@ -83,16 +95,14 @@ export default function UploadPage() {
       return null;
     }
 
+    if (isCurrentGroupMatchedToInput()) {
+      return currentGroup;
+    }
+
     setResolvingGroup(true);
 
     try {
-      const groups = await fetchJson(
-        `/raw-groups/search?name=${encodeURIComponent(trimmed)}&limit=50`,
-        {
-          headers: buildHeaders(),
-        }
-      );
-
+      const groups = await searchGroups({ name: trimmed, limit: 50 });
       const exact = (groups || []).find(
         (group) => (group.name || "").trim().toLowerCase() === trimmed.toLowerCase()
       );
@@ -104,11 +114,20 @@ export default function UploadPage() {
         return null;
       }
 
-      setCurrentGroup(exact);
+      selectGroup(exact);
       return exact;
     } finally {
       setResolvingGroup(false);
     }
+  }
+
+  async function getGroupForOperation() {
+    const group = await resolveGroupByName(effectiveGroupName);
+    if (!group?.id) {
+      throw new Error("Группа не найдена.");
+    }
+
+    return group;
   }
 
   async function handleResolveGroup() {
@@ -118,10 +137,12 @@ export default function UploadPage() {
     try {
       const group = await resolveGroupByName(effectiveGroupName);
       if (group) {
-        setMessage(`Выбрана группа: ${group.name} (ID ${group.id})`);
         await loadRawTracesByGroup(group);
       }
     } catch (e) {
+      setCurrentGroup(null);
+      setRawTraces([]);
+      setSelectedDonors([]);
       setError(e.message || "Не удалось найти группу");
     }
   }
@@ -133,12 +154,7 @@ export default function UploadPage() {
     setError("");
 
     try {
-      const data = await fetchJson(
-        `/raw-traces/search?group_id=${encodeURIComponent(group.id)}`,
-        {
-          headers: buildHeaders(),
-        }
-      );
+      const data = await getRawTracesByGroup(group.id);
       setRawTraces(data || []);
     } catch (e) {
       setError(e.message || "Не удалось загрузить список трасс");
@@ -158,20 +174,11 @@ export default function UploadPage() {
     }
 
     setBusy(true);
+
     try {
-      const group = await resolveGroupByName(effectiveGroupName);
-      if (!group?.id) {
-        throw new Error("Группа не найдена.");
-      }
+      const group = await getGroupForOperation();
 
-      const formData = new FormData();
-      formData.append("file", descriptionFile);
-
-      await fetchJson(`/raw-groups/${group.id}/upload-description`, {
-        method: "POST",
-        headers: buildHeaders(),
-        body: formData,
-      });
+      await uploadGroupDescription(group.id, descriptionFile);
 
       setMessage(`Описание успешно загружено для группы «${group.name}».`);
       setDescriptionFile(null);
@@ -193,20 +200,11 @@ export default function UploadPage() {
     }
 
     setBusy(true);
+
     try {
-      const group = await resolveGroupByName(effectiveGroupName);
-      if (!group?.id) {
-        throw new Error("Группа не найдена.");
-      }
+      const group = await getGroupForOperation();
 
-      const formData = new FormData();
-      formData.append("file", schemaFile);
-
-      await fetchJson(`/raw-groups/${group.id}/upload-schema`, {
-        method: "POST",
-        headers: buildHeaders(),
-        body: formData,
-      });
+      await uploadGroupSchema(group.id, schemaFile);
 
       setMessage(`Схема успешно загружена для группы «${group.name}».`);
       setSchemaFile(null);
@@ -233,25 +231,13 @@ export default function UploadPage() {
     }
 
     setBusy(true);
+
     try {
-      const group = await resolveGroupByName(effectiveGroupName);
-      if (!group?.name) {
-        throw new Error("Группа не найдена.");
-      }
+      const group = await getGroupForOperation();
 
-      const formData = new FormData();
-      rawFiles.forEach((file) => formData.append("files", file));
+      await uploadPcapBatchToGroup(group.id, rawFiles, rawPoint);
 
-      await fetchJson(
-        `/raw-traces/group/by-name/${encodeURIComponent(group.name)}/batch?point=${encodeURIComponent(rawPoint)}`,
-        {
-          method: "POST",
-          headers: buildHeaders(),
-          body: formData,
-        }
-      );
-
-      setMessage(`Необработанные трассы успешно загружены в группу «${group.name}».`);
+      setMessage(`Сетевые трассы успешно загружены в группу «${group.name}».`);
       setRawFiles([]);
       await loadRawTracesByGroup(group);
     } catch (e) {
@@ -267,7 +253,7 @@ export default function UploadPage() {
     setError("");
 
     if (!labeledFile) {
-      setError("Выберите csv-файл трассы с разметкой.");
+      setError("Выберите csv-файл трассы показателей сети.");
       return;
     }
 
@@ -276,21 +262,17 @@ export default function UploadPage() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append("kind", labeledKind);
-    formData.append("raw_trace_ids", selectedDonors.join(","));
-    formData.append("software_desc", labeledSoftwareDesc);
-    formData.append("file", labeledFile);
-
     setBusy(true);
-    try {
-      await fetchJson(`/labeled-traces`, {
-        method: "POST",
-        headers: buildHeaders(),
-        body: formData,
-      });
 
-      setMessage("Трасса с разметкой успешно загружена.");
+    try {
+      await uploadLabeledTrace(
+        selectedDonors,
+        labeledFile,
+        labeledKind,
+        labeledSoftwareDesc
+      );
+
+      setMessage("Трасса показателей сети успешно загружена.");
       setLabeledFile(null);
       setLabeledSoftwareDesc("");
       setSelectedDonors([]);
@@ -309,14 +291,23 @@ export default function UploadPage() {
 
   function handleGroupNameChange(value) {
     setGroupNameInput(value);
-    setCurrentGroup(null);
-    setRawTraces([]);
-    setSelectedDonors([]);
+
+    const inputName = value.trim().toLowerCase();
+    const selectedName = (currentGroup?.name || "").trim().toLowerCase();
+
+    if (inputName !== selectedName) {
+      setCurrentGroup(null);
+      setRawTraces([]);
+      setSelectedDonors([]);
+    }
+
+    setMessage("");
+    setError("");
   }
 
   return (
     <div className="upload-page">
-      <CreateGroupForm onCreated={setCreatedGroup} />
+      <CreateGroupForm onCreated={handleGroupCreated} />
 
       <div className="upload-card">
         <div className="section-header">
@@ -347,20 +338,21 @@ export default function UploadPage() {
           </button>
         </div>
 
-        <div className="upload-group-picker" style={{ marginTop: 16 }}>
-          <div className="form-field" style={{ flex: 1 }}>
+        <div className="upload-group-picker" style={groupPickerStyle}>
+          <label className="form-field" style={{ minWidth: 0 }}>
             <span className="form-label">Название группы</span>
             <input
               className="input"
-              value={effectiveGroupName}
+              value={groupNameInput}
               onChange={(e) => handleGroupNameChange(e.target.value)}
               placeholder="Введите название группы"
             />
-          </div>
+          </label>
 
           <button
             type="button"
             className="btn btn-secondary"
+            style={groupPickerButtonStyle}
             onClick={handleResolveGroup}
             disabled={!effectiveGroupName || resolvingGroup}
           >
@@ -368,8 +360,16 @@ export default function UploadPage() {
           </button>
         </div>
 
-        {message ? <div className="alert alert-success">{message}</div> : null}
-        {error ? <div className="alert alert-error">{error}</div> : null}
+        <div className="upload-status-area" style={statusAreaStyle} aria-live="polite">
+          {currentGroup ? (
+            <div className="alert alert-success">
+              Выбрана группа: {currentGroup.name} (ID {currentGroup.id})
+            </div>
+          ) : null}
+
+          {message ? <div className="alert alert-success">{message}</div> : null}
+          {error ? <div className="alert alert-error">{error}</div> : null}
+        </div>
 
         {activeTab === "raw" && (
           <>
@@ -557,7 +557,7 @@ export default function UploadPage() {
             </div>
 
             <div className="upload-section">
-              <h3 className="subsection-title">CSV-файл разметки</h3>
+              <h3 className="subsection-title">CSV-файл</h3>
               <form onSubmit={handleUploadLabeledTrace} className="upload-form">
                 <label className="form-field">
                   <span className="form-label">Тип разметки</span>
@@ -598,7 +598,7 @@ export default function UploadPage() {
                 </div>
 
                 <button type="submit" className="btn btn-primary btn-large" disabled={busy}>
-                  Загрузить трассу с разметкой
+                  Загрузить трассу покзателей сети
                 </button>
               </form>
             </div>

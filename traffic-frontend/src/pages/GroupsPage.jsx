@@ -257,17 +257,6 @@ export default function GroupsPage() {
                 setRawFilters({ ...rawFilters, software_desc: e.target.value })
               }
             />
-            <select
-              className="input"
-              value={rawFilters.capture_points}
-              onChange={(e) =>
-                setRawFilters({ ...rawFilters, capture_points: e.target.value })
-              }
-            >
-              <option value="">Точки сбора: любые</option>
-              <option value="1">1 точка</option>
-              <option value="2">2 точки</option>
-            </select>
             <input
               className="input"
               type="datetime-local"
@@ -280,6 +269,17 @@ export default function GroupsPage() {
               value={rawFilters.to_ts}
               onChange={(e) => setRawFilters({ ...rawFilters, to_ts: e.target.value })}
             />
+            <select
+              className="input"
+              value={rawFilters.capture_points}
+              onChange={(e) =>
+                setRawFilters({ ...rawFilters, capture_points: e.target.value })
+              }
+            >
+              <option value="">Точки сбора: любые</option>
+              <option value="1">1 точка</option>
+              <option value="2">2 точки</option>
+            </select>
           </div>
         )}
 
@@ -311,18 +311,6 @@ export default function GroupsPage() {
 
             <input
               className="input"
-              placeholder="ПО разметки"
-              value={labeledFilters.software_desc}
-              onChange={(e) =>
-                setLabeledFilters({
-                  ...labeledFilters,
-                  software_desc: e.target.value,
-                })
-              }
-            />
-
-            <input
-              className="input"
               type="datetime-local"
               value={labeledFilters.from_ts}
               onChange={(e) =>
@@ -336,6 +324,18 @@ export default function GroupsPage() {
               value={labeledFilters.to_ts}
               onChange={(e) =>
                 setLabeledFilters({ ...labeledFilters, to_ts: e.target.value })
+              }
+            />
+
+            <input
+              className="input"
+              placeholder="ПО разметки"
+              value={labeledFilters.software_desc}
+              onChange={(e) =>
+                setLabeledFilters({
+                  ...labeledFilters,
+                  software_desc: e.target.value,
+                })
               }
             />
           </div>

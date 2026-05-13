@@ -10,8 +10,61 @@ function setToken(token) {
   else localStorage.removeItem("token");
 }
 
+function formatDetail(detail) {
+  if (!detail) return "";
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+
+        const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
+        const msg = item.msg || JSON.stringify(item);
+
+        return loc ? `${loc}: ${msg}` : msg;
+      })
+      .join("; ");
+  }
+
+  if (typeof detail === "object") {
+    return JSON.stringify(detail);
+  }
+
+  return String(detail);
+}
+
+async function readErrorMessage(resp) {
+  let msg = `HTTP ${resp.status}`;
+
+  try {
+    const data = await resp.json();
+
+    if (data?.detail) {
+      msg = formatDetail(data.detail);
+    } else if (data?.message) {
+      msg = formatDetail(data.message);
+    } else {
+      msg = JSON.stringify(data);
+    }
+  } catch {
+    try {
+      const text = await resp.text();
+      if (text) msg = text;
+    } catch {
+      // ignore
+    }
+  }
+
+  return msg;
+}
+
 async function apiRequest(path, options = {}) {
   const token = getToken();
+
   const headers = {
     ...(options.headers || {}),
   };
@@ -33,7 +86,11 @@ async function apiRequest(path, options = {}) {
     let msg = `HTTP ${resp.status}`;
     try {
       const data = await resp.json();
-      if (data.detail) msg = data.detail;
+      if (data.detail) {
+        msg = typeof data.detail === "string"
+          ? data.detail
+          : JSON.stringify(data.detail);
+      }
     } catch {
       // ignore
     }
@@ -48,13 +105,14 @@ async function apiRequest(path, options = {}) {
   if (contentType.includes("application/json")) {
     return resp.json();
   }
+
   return resp;
 }
 
 async function apiRequestForm(path, formData, method = "POST") {
   const token = getToken();
-  const headers = {};
 
+  const headers = {};
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -66,14 +124,7 @@ async function apiRequestForm(path, formData, method = "POST") {
   });
 
   if (!resp.ok) {
-    let msg = `HTTP ${resp.status}`;
-    try {
-      const data = await resp.json();
-      if (data.detail) msg = data.detail;
-    } catch {
-      // ignore
-    }
-    throw new Error(msg);
+    throw new Error(await readErrorMessage(resp));
   }
 
   if (resp.status === 204) {
@@ -84,27 +135,31 @@ async function apiRequestForm(path, formData, method = "POST") {
   if (contentType.includes("application/json")) {
     return resp.json();
   }
+
   return resp;
 }
 
 async function downloadByGet(path, filename) {
   const token = getToken();
+
   const resp = await fetch(`${API_BASE_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
   if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status}`);
+    throw new Error(await readErrorMessage(resp));
   }
 
   const blob = await resp.blob();
   const url = window.URL.createObjectURL(blob);
+
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
+
   window.URL.revokeObjectURL(url);
 }
 
@@ -119,6 +174,7 @@ export async function loginRequest(login, password) {
   if (data.access_token) {
     setToken(data.access_token);
   }
+
   return data;
 }
 
@@ -160,6 +216,23 @@ export async function resetUserPasswordApi(userId, newPassword) {
   });
 }
 
+export async function getUserByLoginApi(login) {
+  return apiRequest(`/users/by-login/${encodeURIComponent(login)}`);
+}
+
+export async function deleteUserByLoginApi(login) {
+  return apiRequest(`/users/by-login/${encodeURIComponent(login)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function resetUserPasswordByLoginApi(login, newPassword) {
+  return apiRequest(`/users/by-login/${encodeURIComponent(login)}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ new_password: newPassword }),
+  });
+}
+
 /* -------- RAW GROUPS -------- */
 
 export async function getGroups() {
@@ -169,9 +242,15 @@ export async function getGroups() {
 export async function searchGroups(params = {}) {
   const qs = new URLSearchParams();
 
+  if (params.name) qs.append("name", params.name);
   if (params.org) qs.append("org", params.org);
   if (params.data_character) qs.append("data_character", params.data_character);
+  if (params.hardware_desc) qs.append("hardware_desc", params.hardware_desc);
+  if (params.software_desc) qs.append("software_desc", params.software_desc);
   if (params.capture_points) qs.append("capture_points", params.capture_points);
+  if (params.from_ts) qs.append("from_ts", params.from_ts);
+  if (params.to_ts) qs.append("to_ts", params.to_ts);
+  if (params.limit) qs.append("limit", params.limit);
 
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return apiRequest(`/raw-groups/search${suffix}`);
@@ -202,18 +281,21 @@ export async function exportGroupZip(groupId) {
 export async function importGroupZip(zipFile) {
   const fd = new FormData();
   fd.append("file", zipFile);
+
   return apiRequestForm("/raw-groups/import", fd, "POST");
 }
 
 export async function uploadGroupDescription(groupId, file) {
   const fd = new FormData();
   fd.append("file", file);
+
   return apiRequestForm(`/raw-groups/${groupId}/upload-description`, fd, "POST");
 }
 
 export async function uploadGroupSchema(groupId, file) {
   const fd = new FormData();
   fd.append("file", file);
+
   return apiRequestForm(`/raw-groups/${groupId}/upload-schema`, fd, "POST");
 }
 
@@ -226,6 +308,7 @@ export async function getRawTracesByGroup(groupId) {
 export async function uploadPcapToGroup(groupId, file, point = "Single") {
   const fd = new FormData();
   fd.append("file", file);
+
   return apiRequestForm(
     `/raw-traces/group/${groupId}?point=${encodeURIComponent(point)}`,
     fd,
@@ -235,9 +318,11 @@ export async function uploadPcapToGroup(groupId, file, point = "Single") {
 
 export async function uploadPcapBatchToGroup(groupId, files, point = "Single") {
   const fd = new FormData();
+
   for (const file of files) {
     fd.append("files", file);
   }
+
   return apiRequestForm(
     `/raw-traces/group/${groupId}/batch?point=${encodeURIComponent(point)}`,
     fd,
@@ -250,11 +335,15 @@ export async function getRawTrace(traceId) {
 }
 
 export async function downloadRawTrace(traceId) {
-  return downloadByGet(`/raw-traces/${traceId}/download`, `trace_${traceId}.pcap`);
+  return downloadByGet(
+    `/raw-traces/${traceId}/download`,
+    `trace_${traceId}.pcap`
+  );
 }
 
 export async function exportRawTraceSegment(traceId, t_from, t_to) {
   const qs = new URLSearchParams({ t_from, t_to });
+
   return downloadByGet(
     `/raw-traces/${traceId}/export?${qs.toString()}`,
     `trace_${traceId}_segment.pcap`
@@ -275,7 +364,8 @@ export async function searchRawTraces(params = {}) {
   if (params.to_ts) qs.append("to_ts", params.to_ts);
   if (params.limit) qs.append("limit", params.limit);
 
-  return apiRequest(`/raw-traces/search?${qs.toString()}`);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiRequest(`/raw-traces/search${suffix}`);
 }
 
 /* -------- LABELED TRACES -------- */
@@ -293,7 +383,8 @@ export async function searchLabeledTraces(params = {}) {
   if (params.to_ts) qs.append("to_ts", params.to_ts);
   if (params.limit) qs.append("limit", params.limit);
 
-  return apiRequest(`/labeled-traces/search?${qs.toString()}`);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiRequest(`/labeled-traces/search${suffix}`);
 }
 
 export async function getLabeledTrace(labeledTraceId) {
@@ -309,18 +400,28 @@ export async function downloadLabeledTrace(labeledTraceId) {
 
 export async function exportLabeledTraceSegment(labeledTraceId, t_from, t_to) {
   const qs = new URLSearchParams({ t_from, t_to });
+
   return downloadByGet(
     `/labeled-traces/${labeledTraceId}/export?${qs.toString()}`,
     `labeled_trace_${labeledTraceId}_segment.csv`
   );
 }
 
-export async function uploadLabeledTrace(rawTraceIds, file, kind, softwareDesc = "") {
+export async function uploadLabeledTrace(
+  rawTraceIds,
+  file,
+  kind,
+  softwareDesc = ""
+) {
   const fd = new FormData();
+
   fd.append("file", file);
   fd.append("kind", kind);
   fd.append("software_desc", softwareDesc);
-  fd.append("raw_trace_ids", Array.isArray(rawTraceIds) ? rawTraceIds.join(",") : String(rawTraceIds));
+  fd.append(
+    "raw_trace_ids",
+    Array.isArray(rawTraceIds) ? rawTraceIds.join(",") : String(rawTraceIds)
+  );
 
   return apiRequestForm("/labeled-traces", fd, "POST");
 }
@@ -328,22 +429,10 @@ export async function uploadLabeledTrace(rawTraceIds, file, kind, softwareDesc =
 export async function uploadLabeledDescription(labeledTraceId, file) {
   const fd = new FormData();
   fd.append("file", file);
-  return apiRequestForm(`/labeled-traces/${labeledTraceId}/description`, fd, "POST");
-}
 
-export async function getUserByLoginApi(login) {
-  return apiRequest(`/users/by-login/${encodeURIComponent(login)}`);
-}
-
-export async function deleteUserByLoginApi(login) {
-  return apiRequest(`/users/by-login/${encodeURIComponent(login)}`, {
-    method: "DELETE",
-  });
-}
-
-export async function resetUserPasswordByLoginApi(login, newPassword) {
-  return apiRequest(`/users/by-login/${encodeURIComponent(login)}/reset-password`, {
-    method: "POST",
-    body: JSON.stringify({ new_password: newPassword }),
-  });
+  return apiRequestForm(
+    `/labeled-traces/${labeledTraceId}/description`,
+    fd,
+    "POST"
+  );
 }
