@@ -173,6 +173,7 @@ def user_headers(client, regular_user):
 @pytest.fixture()
 def sample_group_payload():
     return {
+        "name": "Test raw group",
         "org": "MSU",
         "data_character": "L2 traffic",
         "hardware_desc": "Server Xeon, 64GB RAM",

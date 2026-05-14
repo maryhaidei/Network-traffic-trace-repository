@@ -17,6 +17,6 @@ COPY alembic /app/alembic
 
 RUN pip install --upgrade pip setuptools wheel
 
-RUN pip install --no-build-isolation -e .
+RUN pip install --no-build-isolation -e ".[dev]"
 
 CMD ["bash", "-lc", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]

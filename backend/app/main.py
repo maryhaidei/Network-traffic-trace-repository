@@ -15,8 +15,6 @@ from app.routers.raw_groups import router as raw_groups_router
 from app.routers.raw_traces import router as raw_traces_router
 from app.routers.labeled_traces import router as labeled_traces_router
 
-
-
 app = FastAPI(title="Traffic Trace Repository (V1)")
 
 app.add_middleware(

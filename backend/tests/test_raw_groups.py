@@ -5,6 +5,7 @@ def test_create_raw_group(client, admin_headers, sample_group_payload):
     assert data["org"] == "MSU"
     assert data["capture_points"] == 1
     assert "id" in data
+    assert data["name"] == sample_group_payload["name"]
 
 
 def test_upload_group_description(client, admin_headers, created_group):
