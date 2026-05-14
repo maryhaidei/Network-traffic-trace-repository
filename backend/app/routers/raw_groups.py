@@ -50,6 +50,7 @@ def _save_group_meta_file(
     content_type = "md" if is_description else (file.content_type or "application/octet-stream")
     fo = FileObject(
         storage_path=str(dst),
+        original_filename=file.filename,
         content_type=content_type,
         size_bytes=size,
         sha256=sha,
@@ -458,6 +459,7 @@ def import_group_zip(
 
                 fo = FileObject(
                     storage_path=str(desc_path),
+                    original_filename="description.md",
                     content_type="md",
                     size_bytes=len(desc_bytes),
                     sha256=_sha256_bytes(desc_bytes),
@@ -484,6 +486,7 @@ def import_group_zip(
 
                 fo = FileObject(
                     storage_path=str(schema_path),
+                    original_filename=Path(schema_name).name,
                     content_type="image",
                     size_bytes=len(schema_bytes),
                     sha256=_sha256_bytes(schema_bytes),
@@ -509,6 +512,7 @@ def import_group_zip(
 
                 fo = FileObject(
                     storage_path=str(pcap_path),
+                    original_filename=Path(pcap_name).name,
                     content_type="pcap",
                     size_bytes=len(pcap_bytes),
                     sha256=_sha256_bytes(pcap_bytes),

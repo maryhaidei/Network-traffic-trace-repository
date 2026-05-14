@@ -14,6 +14,7 @@ class RawTraceOut(BaseModel):
     capture_series: str | None = None
     part_index: int | None = None
     created_at: datetime | None = None
+    original_filename: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -28,6 +29,7 @@ class RawTraceSearchOut(BaseModel):
     packets_count: int | None = None
     capture_series: str | None = None
     part_index: int | None = None
+    original_filename: str | None = None
 
     org: str | None = None
     data_character: str | None = None

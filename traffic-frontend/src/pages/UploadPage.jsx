@@ -130,6 +130,26 @@ export default function UploadPage() {
     return group;
   }
 
+function formatRawTraceName(trace) {
+  if (trace.original_filename) {
+    return trace.original_filename;
+  }
+
+  if (
+    trace.capture_series &&
+    trace.part_index !== null &&
+    trace.part_index !== undefined
+  ) {
+    return `${trace.capture_series}${String(trace.part_index).padStart(3, "0")}`;
+  }
+
+  if (trace.capture_series) {
+    return trace.capture_series;
+  }
+
+  return `PCAP-файл #${trace.id}`;
+}
+
   async function handleResolveGroup() {
     setError("");
     setMessage("");
@@ -332,7 +352,13 @@ export default function UploadPage() {
           <button
             type="button"
             className={`btn ${activeTab === "labeled" ? "btn-primary" : "btn-secondary"}`}
-            onClick={() => setActiveTab("labeled")}
+            onClick={async () => {
+              setActiveTab("labeled");
+
+              if (currentGroup?.id && rawTraces.length === 0) {
+                await loadRawTracesByGroup(currentGroup);
+              }
+            }}
           >
             Трассы с разметкой
           </button>
@@ -494,7 +520,7 @@ export default function UploadPage() {
                   <table className="simple-table">
                     <thead>
                       <tr>
-                        <th>ID</th>
+                        <th>Трасса</th>
                         <th>Point</th>
                         <th>t_min</th>
                         <th>t_max</th>
@@ -504,7 +530,7 @@ export default function UploadPage() {
                     <tbody>
                       {rawTraces.map((trace) => (
                         <tr key={trace.id}>
-                          <td>{trace.id}</td>
+                          <td>{formatRawTraceName(trace)}</td>
                           <td>{trace.point}</td>
                           <td>{trace.t_min || "—"}</td>
                           <td>{trace.t_max || "—"}</td>
@@ -548,7 +574,10 @@ export default function UploadPage() {
                         onChange={() => toggleDonor(trace.id)}
                       />
                       <span>
-                        ID {trace.id}, point={trace.point}, packets={trace.packets_count ?? "—"}
+                        {formatRawTraceName(trace)}
+                        <span className="muted-text">
+                          {" "}· ID {trace.id} · point={trace.point} · packets={trace.packets_count ?? "—"}
+                        </span>
                       </span>
                     </label>
                   ))}

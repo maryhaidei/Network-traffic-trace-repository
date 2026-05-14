@@ -42,12 +42,13 @@ def _validate_point_for_group(group: RawGroup, point: str) -> str:
     return point
 
 
-def _trace_search_out(rt: RawTrace, group: RawGroup) -> RawTraceSearchOut:
+def _trace_search_out(rt: RawTrace, group: RawGroup, file_object: FileObject | None = None,) -> RawTraceSearchOut:
     return RawTraceSearchOut(
         id=rt.id,
         group_id=rt.group_id,
         point=rt.point,
         file_id=rt.file_id,
+        original_filename=file_object.original_filename if file_object else None,
         t_min=rt.t_min,
         t_max=rt.t_max,
         packets_count=rt.packets_count,
@@ -87,6 +88,7 @@ def upload_pcap(
 
     fo = FileObject(
         storage_path=str(dst),
+        original_filename=file.filename,
         content_type="pcap",
         size_bytes=size,
         sha256=sha,
@@ -194,6 +196,7 @@ def upload_pcap_batch_by_group_name(
 
         fo = FileObject(
             storage_path=str(dst),
+            original_filename=file.filename,
             content_type="pcap",
             size_bytes=size,
             sha256=sha,
@@ -299,7 +302,11 @@ def search_traces(
 ):
     limit = max(1, min(limit, 200))
 
-    q = db.query(RawTrace, RawGroup).join(RawGroup, RawTrace.group_id == RawGroup.id)
+    q = (
+        db.query(RawTrace, RawGroup, FileObject)
+        .join(RawGroup, RawTrace.group_id == RawGroup.id)
+        .join(FileObject, RawTrace.file_id == FileObject.id)
+    )
 
     if group_id is not None:
         q = q.filter(RawTrace.group_id == group_id)
@@ -321,7 +328,7 @@ def search_traces(
         q = q.filter(RawGroup.name.ilike(f"%{group_name}%"))
 
     rows = q.order_by(RawTrace.id.desc()).limit(limit).all()
-    return [_trace_search_out(rt, group) for rt, group in rows]
+    return [_trace_search_out(rt, group, file_object) for rt, group, file_object in rows]
 
 
 @router.get("/{trace_id}", response_model=RawTraceOut)
