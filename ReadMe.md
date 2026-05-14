@@ -13,7 +13,6 @@
 3. **Git** — для клонирования проекта.
 4. **Node.js и npm** — для запуска frontend-приложения.
 5. **Python 3.11+ или Python 3.12+** — нужен для локального запуска backend или тестов без Docker.
-6. **DBeaver** — необязательно, но удобно для просмотра базы данных и выполнения SQL-запросов.
 
 Проверить наличие основных программ можно командами:
 
@@ -28,11 +27,58 @@ python --version
 
 Все дальнейшие команды выполняются из корня проекта, если отдельно не указано другое.
 
+## Установка на macOS
+### 1. Установить Homebrew c официального сайта
+### 2. Выполнить
+```
+brew install git
+brew install node
+brew install python
+brew install --cask docker-desktop
+```
+## Установка на Linux Ubuntu/Debian
+```
+# Обновить список пакетов
+sudo apt update
+
+# Установить базовые утилиты, Git и Python
+sudo apt install -y ca-certificates curl gnupg git python3 python3-pip python3-venv
+
+# Установить Node.js и npm
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Установить Docker Engine и Docker Compose plugin
+sudo install -m 0755 -d /etc/apt/keyrings
+
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  -o /etc/apt/keyrings/docker.asc
+
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Добавить текущего пользователя в группу docker,
+# чтобы запускать docker без sudo
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
 ## Настройка backend `.env`
 
 Backend использует переменные окружения для подключения к базе данных, настройки JWT-токенов, файлового хранилища и создания администратора при первом запуске.
 
 Создайте файл `.env` для backend. В зависимости от структуры проекта он может находиться в корне backend-папки или в той директории, которая используется как рабочая директория backend-контейнера.
+
+Данный файл хранится в КОРНЕ проекта!!!!
 
 Пример содержимого backend `.env`:
 
@@ -93,7 +139,7 @@ trace_repo - имя БД из POSTGRES_DB;
 
 ## Настройка frontend `.env`
 
-В папке frontend создайте файл:
+В папке fraffic-frontend создайте файл:
 
 ```text
 .env
@@ -150,6 +196,11 @@ docker compose up -d db
 ```bash
 docker compose exec backend alembic upgrade head
 ```
+Далее нужно проверить версию миграции: 
+```
+docker compose exec backend alembic current
+```
+Должна быть версия: ce4ee8bdae9b
 
 Если backend-контейнер не запущен, можно выполнить миграции через одноразовый запуск контейнера:
 
@@ -228,6 +279,7 @@ docker compose exec backend pytest tests
 В папке traffic-frontend выполнить:
 
 ```bash
+brew install node или sudo apt install -y nodejs npm
 npm install
 npm run dev
 ```
