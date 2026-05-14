@@ -234,24 +234,14 @@ npm run dev
 
 ## Нагрузочное тестирование
 
-Если в проекте есть `locustfile.py`, можно запустить Locust:
-
-```bash
-locust -f locustfile.py --host http://localhost:8000
+Из корня проекта выполнить: 
+```
+python backend/loadtests/run_series.py
 ```
 
-После запуска откройте веб-интерфейс Locust:
-
-```text
-http://localhost:8089
+После завершения всех тестов можно выполнить дял построения итоговой таблицы: 
 ```
-
-В интерфейсе можно задать число пользователей, скорость нарастания нагрузки и начать тест.
-
-Если Locust запускается через Docker Compose, команда зависит от наличия отдельного сервиса `locust` в `docker-compose.yml`, например:
-
-```bash
-docker compose run --rm locust
+python backend/loadtests/render_results.py
 ```
 
 ## Освобождение занятых портов
@@ -345,8 +335,4 @@ npm run dev
 http://localhost:5173
 ```
 
-и войти под администратором:
-
-```text
-admin000 / admin
-```
+и войти под администратором.
