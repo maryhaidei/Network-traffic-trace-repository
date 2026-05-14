@@ -85,10 +85,11 @@ ADMIN_LOGIN=admin000
 ```env
 DATABASE_URL=postgresql+psycopg://trace_user:trace_pass@db:5432/trace_repo
 ```
-trace_user - имя пользователя из POSTGRES_USER
-trace_pass - пароль из POSTGRES_PASSWORD
-trace_repo - имя БД из POSTGRES_DB
-
+```
+trace_user - имя пользователя из POSTGRES_USER; 
+trace_pass - пароль из POSTGRES_PASSWORD; 
+trace_repo - имя БД из POSTGRES_DB; 
+```
 
 ## Настройка frontend `.env`
 
