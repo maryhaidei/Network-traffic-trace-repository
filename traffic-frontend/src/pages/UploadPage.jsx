@@ -56,6 +56,26 @@ export default function UploadPage() {
     marginTop: 16,
   };
 
+  function formatRawTraceName(trace) {
+    if (trace.original_filename) {
+      return trace.original_filename;
+    }
+
+    if (
+      trace.capture_series &&
+      trace.part_index !== null &&
+      trace.part_index !== undefined
+    ) {
+      return `${trace.capture_series}${String(trace.part_index).padStart(3, "0")}`;
+    }
+
+    if (trace.capture_series) {
+      return trace.capture_series;
+    }
+
+    return `PCAP-файл #${trace.id}`;
+  }
+
   function selectGroup(group) {
     if (!group) return;
 
@@ -103,8 +123,10 @@ export default function UploadPage() {
 
     try {
       const groups = await searchGroups({ name: trimmed, limit: 50 });
+
       const exact = (groups || []).find(
-        (group) => (group.name || "").trim().toLowerCase() === trimmed.toLowerCase()
+        (group) =>
+          (group.name || "").trim().toLowerCase() === trimmed.toLowerCase()
       );
 
       if (!exact) {
@@ -123,6 +145,7 @@ export default function UploadPage() {
 
   async function getGroupForOperation() {
     const group = await resolveGroupByName(effectiveGroupName);
+
     if (!group?.id) {
       throw new Error("Группа не найдена.");
     }
@@ -130,32 +153,13 @@ export default function UploadPage() {
     return group;
   }
 
-function formatRawTraceName(trace) {
-  if (trace.original_filename) {
-    return trace.original_filename;
-  }
-
-  if (
-    trace.capture_series &&
-    trace.part_index !== null &&
-    trace.part_index !== undefined
-  ) {
-    return `${trace.capture_series}${String(trace.part_index).padStart(3, "0")}`;
-  }
-
-  if (trace.capture_series) {
-    return trace.capture_series;
-  }
-
-  return `PCAP-файл #${trace.id}`;
-}
-
   async function handleResolveGroup() {
     setError("");
     setMessage("");
 
     try {
       const group = await resolveGroupByName(effectiveGroupName);
+
       if (group) {
         await loadRawTracesByGroup(group);
       }
@@ -273,7 +277,7 @@ function formatRawTraceName(trace) {
     setError("");
 
     if (!labeledFile) {
-      setError("Выберите csv-файл трассы показателей сети.");
+      setError("Выберите csv-файл трассы с разметкой.");
       return;
     }
 
@@ -292,7 +296,7 @@ function formatRawTraceName(trace) {
         labeledSoftwareDesc
       );
 
-      setMessage("Трасса показателей сети успешно загружена.");
+      setMessage("Трасса с разметкой успешно загружена.");
       setLabeledFile(null);
       setLabeledSoftwareDesc("");
       setSelectedDonors([]);
@@ -325,6 +329,14 @@ function formatRawTraceName(trace) {
     setError("");
   }
 
+  async function switchToLabeledTab() {
+    setActiveTab("labeled");
+
+    if (currentGroup?.id && rawTraces.length === 0) {
+      await loadRawTracesByGroup(currentGroup);
+    }
+  }
+
   return (
     <div className="upload-page">
       <CreateGroupForm onCreated={handleGroupCreated} />
@@ -347,18 +359,13 @@ function formatRawTraceName(trace) {
             className={`btn ${activeTab === "raw" ? "btn-primary" : "btn-secondary"}`}
             onClick={() => setActiveTab("raw")}
           >
-            Необработанные трассы
+            Сетевые трассы
           </button>
+
           <button
             type="button"
             className={`btn ${activeTab === "labeled" ? "btn-primary" : "btn-secondary"}`}
-            onClick={async () => {
-              setActiveTab("labeled");
-
-              if (currentGroup?.id && rawTraces.length === 0) {
-                await loadRawTracesByGroup(currentGroup);
-              }
-            }}
+            onClick={switchToLabeledTab}
           >
             Трассы с разметкой
           </button>
@@ -401,6 +408,7 @@ function formatRawTraceName(trace) {
           <>
             <div className="upload-section">
               <h3 className="subsection-title">Описание группы</h3>
+
               <form onSubmit={handleUploadDescription} className="upload-form">
                 <div className="file-picker">
                   <input
@@ -410,22 +418,25 @@ function formatRawTraceName(trace) {
                     onChange={(e) => setDescriptionFile(e.target.files?.[0] || null)}
                     hidden
                   />
+
                   <label htmlFor="group-description-file" className="btn btn-secondary">
                     Выбрать файл
                   </label>
+
                   <span className="file-name">
                     {descriptionFile ? descriptionFile.name : "Файл не выбран"}
                   </span>
                 </div>
 
                 <button type="submit" className="btn btn-primary" disabled={busy}>
-                  Загрузить описание
+                  {busy ? "Загрузка..." : "Загрузить описание"}
                 </button>
               </form>
             </div>
 
             <div className="upload-section">
               <h3 className="subsection-title">Схема группы</h3>
+
               <form onSubmit={handleUploadSchema} className="upload-form">
                 <div className="file-picker">
                   <input
@@ -435,22 +446,25 @@ function formatRawTraceName(trace) {
                     onChange={(e) => setSchemaFile(e.target.files?.[0] || null)}
                     hidden
                   />
+
                   <label htmlFor="group-schema-file" className="btn btn-secondary">
                     Выбрать файл
                   </label>
+
                   <span className="file-name">
                     {schemaFile ? schemaFile.name : "Файл не выбран"}
                   </span>
                 </div>
 
                 <button type="submit" className="btn btn-primary" disabled={busy}>
-                  Загрузить схему
+                  {busy ? "Загрузка..." : "Загрузить схему"}
                 </button>
               </form>
             </div>
 
             <div className="upload-section">
               <h3 className="subsection-title">Файлы трасс</h3>
+
               <form onSubmit={handleUploadRawTraces} className="upload-form">
                 <label className="form-field">
                   <span className="form-label">Точка сбора</span>
@@ -474,9 +488,11 @@ function formatRawTraceName(trace) {
                     onChange={(e) => setRawFiles(Array.from(e.target.files || []))}
                     hidden
                   />
+
                   <label htmlFor="raw-traces-files" className="btn btn-secondary">
                     Выбрать файлы
                   </label>
+
                   <span className="file-name">
                     {rawFiles.length > 0
                       ? `Выбрано файлов: ${rawFiles.length}`
@@ -484,7 +500,7 @@ function formatRawTraceName(trace) {
                   </span>
                 </div>
 
-                {rawFiles.length > 0 && (
+                {rawFiles.length > 0 ? (
                   <div className="selected-files">
                     {rawFiles.map((file) => (
                       <div key={file.name} className="selected-file-item">
@@ -492,10 +508,10 @@ function formatRawTraceName(trace) {
                       </div>
                     ))}
                   </div>
-                )}
+                ) : null}
 
                 <button type="submit" className="btn btn-primary btn-large" disabled={busy}>
-                  Загрузить трассы
+                  {busy ? "Загрузка..." : "Загрузить трассы"}
                 </button>
               </form>
             </div>
@@ -503,6 +519,7 @@ function formatRawTraceName(trace) {
             <div className="upload-section">
               <div className="upload-section-header">
                 <h3 className="subsection-title">Трассы текущей группы</h3>
+
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -514,24 +531,29 @@ function formatRawTraceName(trace) {
               </div>
 
               {rawTraces.length === 0 ? (
-                <div className="muted-text">Пока нет загруженных трасс или список не обновлён.</div>
+                <div className="muted-text">
+                  Пока нет загруженных трасс или список не обновлён.
+                </div>
               ) : (
                 <div className="simple-table-wrap">
                   <table className="simple-table">
                     <thead>
                       <tr>
                         <th>Трасса</th>
+                        <th>ID</th>
                         <th>Point</th>
                         <th>t_min</th>
                         <th>t_max</th>
                         <th>Packets</th>
                       </tr>
                     </thead>
+
                     <tbody>
                       {rawTraces.map((trace) => (
                         <tr key={trace.id}>
                           <td>{formatRawTraceName(trace)}</td>
-                          <td>{trace.point}</td>
+                          <td>{trace.id}</td>
+                          <td>{trace.point || "—"}</td>
                           <td>{trace.t_min || "—"}</td>
                           <td>{trace.t_max || "—"}</td>
                           <td>{trace.packets_count ?? "—"}</td>
@@ -550,13 +572,16 @@ function formatRawTraceName(trace) {
             <div className="upload-section">
               <div className="upload-section-header">
                 <h3 className="subsection-title">Трассы-доноры</h3>
+
                 <button
                   type="button"
                   className="btn btn-secondary"
                   onClick={handleResolveGroup}
                   disabled={!effectiveGroupName || loadingRawTraces || resolvingGroup}
                 >
-                  {loadingRawTraces || resolvingGroup ? "Загрузка..." : "Загрузить трассы группы"}
+                  {loadingRawTraces || resolvingGroup
+                    ? "Загрузка..."
+                    : "Загрузить трассы группы"}
                 </button>
               </div>
 
@@ -573,10 +598,13 @@ function formatRawTraceName(trace) {
                         checked={selectedDonors.includes(trace.id)}
                         onChange={() => toggleDonor(trace.id)}
                       />
+
                       <span>
-                        {formatRawTraceName(trace)}
+                        <strong>{formatRawTraceName(trace)}</strong>
                         <span className="muted-text">
-                          {" "}· ID {trace.id} · point={trace.point} · packets={trace.packets_count ?? "—"}
+                          {" "}
+                          · ID {trace.id} · point={trace.point || "—"} · packets=
+                          {trace.packets_count ?? "—"}
                         </span>
                       </span>
                     </label>
@@ -586,7 +614,8 @@ function formatRawTraceName(trace) {
             </div>
 
             <div className="upload-section">
-              <h3 className="subsection-title">CSV-файл</h3>
+              <h3 className="subsection-title">CSV-файл разметки</h3>
+
               <form onSubmit={handleUploadLabeledTrace} className="upload-form">
                 <label className="form-field">
                   <span className="form-label">Тип разметки</span>
@@ -618,16 +647,22 @@ function formatRawTraceName(trace) {
                     onChange={(e) => setLabeledFile(e.target.files?.[0] || null)}
                     hidden
                   />
+
                   <label htmlFor="labeled-trace-file" className="btn btn-secondary">
                     Выбрать CSV
                   </label>
+
                   <span className="file-name">
                     {labeledFile ? labeledFile.name : "Файл не выбран"}
                   </span>
                 </div>
 
-                <button type="submit" className="btn btn-primary btn-large" disabled={busy}>
-                  Загрузить трассу покзателей сети
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-large"
+                  disabled={busy}
+                >
+                  {busy ? "Загрузка..." : "Загрузить трассу с разметкой"}
                 </button>
               </form>
             </div>

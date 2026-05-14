@@ -119,6 +119,7 @@ class TraceRepositoryUser(HttpUser):
 
         suffix = f"{int(time.time() * 1000)}-{random.randint(1000, 9999)}"
         payload = {
+            "name": f"loadtest-group-{suffix}",
             "org": SEARCH_ORG,
             "data_character": f"loadtest-{suffix}",
             "hardware_desc": "Load test hardware",
